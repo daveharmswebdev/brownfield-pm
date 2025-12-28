@@ -1,0 +1,29 @@
+# Production Docker Compose override
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# This file overrides development settings for production-like local testing.
+# For actual production deployment, use Render (see render.yaml).
+
+services:
+  api:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - Jwt__Secret=${JWT_SECRET:-production-secret-key-must-be-at-least-32-characters-long}
+      - Jwt__Issuer=${JWT_ISSUER:-https://api.property-manager.app}
+      - Jwt__Audience=${JWT_AUDIENCE:-https://property-manager.app}
+      - Email__Provider=${EMAIL_PROVIDER:-Smtp}
+      - Email__SmtpHost=${EMAIL_SMTP_HOST:-mailhog}
+      - Email__SmtpPort=${EMAIL_SMTP_PORT:-1025}
+      - Email__FromAddress=${EMAIL_FROM_ADDRESS:-noreply@property-manager.app}
+    restart: unless-stopped
+
+  web:
+    restart: unless-stopped
+
+  db:
+    restart: unless-stopped
+    # In production, you might want to add resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M

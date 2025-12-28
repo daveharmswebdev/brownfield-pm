@@ -1,0 +1,81 @@
+// Bottom Navigation Styles (AC7.5)
+// Mobile-only tab bar with FAB
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--pm-bottom-nav-height);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background-color: var(--pm-surface);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  padding: 0 8px;
+
+  // Safe area for notched devices
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.nav-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: var(--pm-text-secondary);
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+
+  // Touch-friendly tap targets (min 44px) (AC7.5)
+  min-width: 44px;
+  min-height: 44px;
+
+  mat-icon {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+  }
+
+  .nav-label {
+    font-size: 10px;
+    margin-top: 2px;
+    font-weight: 500;
+  }
+
+  &:hover {
+    background-color: rgba(102, 187, 106, 0.08);
+  }
+
+  // Active state with Forest Green
+  &.active {
+    color: var(--pm-primary);
+
+    mat-icon {
+      color: var(--pm-primary);
+    }
+
+    .nav-label {
+      font-weight: 600;
+    }
+  }
+}
+
+// FAB for quick actions (AC7.5)
+.quick-action-fab {
+  position: fixed;
+  bottom: calc(var(--pm-bottom-nav-height) + 16px + env(safe-area-inset-bottom, 0));
+  right: 16px;
+  z-index: 1001;
+
+  // Use accent color (Warm Orange)
+  background-color: var(--pm-accent) !important;
+  color: white !important;
+
+  mat-icon {
+    color: white;
+  }
+}

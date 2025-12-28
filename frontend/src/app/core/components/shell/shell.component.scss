@@ -1,0 +1,108 @@
+// Shell Component Styles
+// Desktop sidebar + light content area layout
+
+.shell-container {
+  height: 100vh;
+  width: 100%;
+}
+
+// Dark sidebar styling (AC7.1)
+.shell-sidenav {
+  width: var(--pm-sidebar-width);
+  background-color: var(--pm-sidebar-bg);
+  border-right: none;
+
+  // Remove default Angular Material sidenav shadow for cleaner look
+  &.mat-drawer {
+    box-shadow: var(--pm-shadow-2);
+  }
+}
+
+// Main content area (AC7.3)
+.shell-content {
+  background-color: var(--pm-background);
+  min-height: 100vh;
+
+  // Add padding at bottom when bottom nav is visible
+  &.with-bottom-nav {
+    padding-bottom: var(--pm-bottom-nav-height);
+  }
+}
+
+// Tablet header with hamburger menu
+.tablet-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: var(--pm-sidebar-bg) !important;
+  color: var(--pm-sidebar-text) !important;
+  box-shadow: var(--pm-shadow-2);
+
+  button {
+    color: var(--pm-sidebar-text);
+
+    &:hover {
+      background-color: var(--pm-sidebar-hover);
+    }
+  }
+
+  .header-title {
+    margin-left: 8px;
+    font-size: 18px;
+    font-weight: 500;
+  }
+
+  .spacer {
+    flex: 1 1 auto;
+  }
+}
+
+// Mobile header with year selector (AC-3.5.1)
+.mobile-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: var(--pm-sidebar-bg) !important;
+  color: var(--pm-sidebar-text) !important;
+  box-shadow: var(--pm-shadow-2);
+
+  .header-title {
+    font-size: 18px;
+    font-weight: 500;
+  }
+
+  .spacer {
+    flex: 1 1 auto;
+  }
+}
+
+.content-area {
+  min-height: 100%;
+  padding: 24px;
+
+  // When tablet header is visible, adjust top padding
+  &.with-tablet-header {
+    padding-top: 24px;
+  }
+
+  // When mobile header is visible, adjust top padding
+  &.with-mobile-header {
+    padding-top: 16px;
+  }
+
+  // Responsive padding adjustments
+  @media (max-width: 767px) {
+    padding: 16px;
+  }
+}
+
+// Ensure mat-sidenav-content fills available space
+::ng-deep .mat-sidenav-content {
+  display: flex;
+  flex-direction: column;
+}
+
+// Backdrop styling for tablet overlay mode
+::ng-deep .mat-drawer-backdrop.mat-drawer-shown {
+  background-color: rgba(0, 0, 0, 0.5);
+}

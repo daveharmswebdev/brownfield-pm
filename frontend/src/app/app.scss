@@ -1,0 +1,46 @@
+// App Root Styles
+
+// Loading container for auth initialization (AC7.8)
+.auth-loading-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: var(--pm-background);
+  gap: 16px;
+
+  p {
+    color: var(--pm-text-secondary);
+    font-size: 14px;
+    margin: 0;
+  }
+}
+
+// Pure CSS spinner to avoid Angular Material in initial bundle
+// This significantly reduces the initial bundle size by ~50KB+
+.css-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid transparent;
+  border-top-color: var(--pm-primary, #1976d2);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+// Respect reduced motion preference for accessibility
+@media (prefers-reduced-motion: reduce) {
+  .css-spinner {
+    animation: none;
+    opacity: 0.7;
+  }
+}

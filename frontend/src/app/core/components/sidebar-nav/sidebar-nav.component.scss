@@ -1,0 +1,156 @@
+// Sidebar Navigation Styles
+// Dark theme with Forest Green accents (AC7.1)
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--pm-sidebar-bg);
+  color: var(--pm-sidebar-text);
+  overflow-x: hidden; // Fix: Remove unwanted horizontal scrollbar
+}
+
+// Header with brand
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 16px;
+
+  .brand-icon {
+    color: var(--pm-primary);
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+  }
+
+  .brand-text {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--pm-sidebar-text);
+    white-space: nowrap;
+  }
+}
+
+// Year selector container (AC-3.5.1)
+.year-selector-container {
+  display: flex;
+  padding: 8px 16px 16px;
+  // Align the calendar icon with the nav item icons (they have 8px margin + 16px padding)
+  padding-left: 24px;
+}
+
+// Navigation list
+.nav-list {
+  padding: 8px 0;
+
+  // Override Angular Material styles for dark theme
+  ::ng-deep {
+    .mat-mdc-list-item {
+      color: var(--pm-sidebar-text) !important;
+
+      &:hover {
+        background-color: var(--pm-sidebar-hover);
+      }
+
+      // Ensure icon color is visible
+      .mat-icon {
+        color: var(--pm-sidebar-text) !important;
+        opacity: 0.8;
+      }
+
+      // Target all text elements in MDC list items
+      .mdc-list-item__primary-text,
+      .mat-mdc-list-item-title,
+      .mat-mdc-list-item-unscoped-content,
+      span[matlistitemtitle] {
+        color: var(--pm-sidebar-text) !important;
+      }
+
+      // Active state styling (AC7.1)
+      &.active {
+        background-color: var(--pm-sidebar-active-bg);
+        border-left: 3px solid var(--pm-sidebar-active-border);
+
+        .mat-icon {
+          color: var(--pm-primary) !important;
+          opacity: 1;
+        }
+
+        .mdc-list-item__primary-text,
+        .mat-mdc-list-item-title,
+        .mat-mdc-list-item-unscoped-content,
+        span[matlistitemtitle] {
+          color: var(--pm-primary) !important;
+          font-weight: 500;
+        }
+      }
+    }
+  }
+}
+
+.nav-item {
+  margin: 2px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+
+  // Badge styling for Receipts
+  .badge {
+    display: inline-block;
+  }
+}
+
+// Push footer to bottom
+.spacer {
+  flex: 1;
+}
+
+// Divider styling for dark theme
+mat-divider {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+// Footer with user info and logout (AC7.2)
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+
+  .user-icon {
+    color: var(--pm-sidebar-text);
+    font-size: 32px;
+    width: 32px;
+    height: 32px;
+    opacity: 0.8;
+  }
+
+  .user-name {
+    font-size: 14px;
+    color: var(--pm-sidebar-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 140px;
+  }
+}
+
+.logout-button {
+  color: var(--pm-sidebar-text);
+
+  &:hover {
+    color: #ff6b6b;
+  }
+
+  mat-spinner {
+    display: inline-block;
+  }
+}

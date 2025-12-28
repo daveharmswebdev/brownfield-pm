@@ -1,0 +1,62 @@
+<nav class="sidebar-nav" aria-label="Main navigation">
+  <!-- App Logo/Brand -->
+  <div class="sidebar-header">
+    <mat-icon class="brand-icon">home</mat-icon>
+    <span class="brand-text">Property Manager</span>
+  </div>
+
+  <!-- Year Selector (AC-3.5.1) -->
+  <div class="year-selector-container">
+    <app-year-selector />
+  </div>
+
+  <mat-divider></mat-divider>
+
+  <!-- Navigation List (AC7.1) -->
+  <mat-nav-list class="nav-list">
+    @for (item of navItems; track item.route) {
+      <a
+        mat-list-item
+        [routerLink]="item.route"
+        routerLinkActive="active"
+        class="nav-item"
+        [attr.data-testid]="'nav-' + item.label.toLowerCase()"
+      >
+        <mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+        <span matListItemTitle>{{ item.label }}</span>
+        @if (item.badge !== null && item.badge !== undefined && item.badge > 0) {
+          <span matListItemMeta>
+            <span class="badge" [matBadge]="item.badge" matBadgeColor="accent" matBadgeSize="small"></span>
+          </span>
+        }
+      </a>
+    }
+  </mat-nav-list>
+
+  <!-- Spacer to push footer to bottom -->
+  <div class="spacer"></div>
+
+  <mat-divider></mat-divider>
+
+  <!-- User Profile Footer (AC7.2) -->
+  <div class="sidebar-footer">
+    <div class="user-info">
+      <mat-icon class="user-icon">account_circle</mat-icon>
+      <span class="user-name" data-testid="user-display-name">{{ userDisplayName }}</span>
+    </div>
+    <button
+      mat-icon-button
+      class="logout-button"
+      (click)="logout()"
+      [disabled]="isLoggingOut()"
+      aria-label="Logout"
+      data-testid="logout-button"
+    >
+      @if (isLoggingOut()) {
+        <mat-spinner diameter="20"></mat-spinner>
+      } @else {
+        <mat-icon>logout</mat-icon>
+      }
+    </button>
+  </div>
+</nav>

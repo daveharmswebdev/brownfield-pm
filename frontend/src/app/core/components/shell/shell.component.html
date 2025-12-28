@@ -1,0 +1,53 @@
+<mat-sidenav-container class="shell-container">
+  <!-- Sidebar Navigation - Desktop (always visible) & Tablet (collapsible) -->
+  @if (showSidebar()) {
+    <mat-sidenav
+      #sidenav
+      [mode]="sidebarMode()"
+      [opened]="sidebarOpened()"
+      (closedStart)="closeSidebar()"
+      class="shell-sidenav"
+      [fixedInViewport]="true"
+    >
+      <app-sidebar-nav />
+    </mat-sidenav>
+  }
+
+  <!-- Main Content Area (AC7.3) -->
+  <mat-sidenav-content class="shell-content" [class.with-bottom-nav]="showBottomNav()">
+    <!-- Tablet Header with Hamburger Menu -->
+    @if (showMenuButton()) {
+      <mat-toolbar class="tablet-header" color="primary">
+        <button
+          mat-icon-button
+          (click)="toggleSidebar()"
+          aria-label="Toggle navigation menu"
+          data-testid="menu-toggle-button"
+        >
+          <mat-icon>{{ sidebarOpen() ? 'close' : 'menu' }}</mat-icon>
+        </button>
+        <span class="header-title">Property Manager</span>
+        <span class="spacer"></span>
+        <app-year-selector class="light-theme" />
+      </mat-toolbar>
+    }
+
+    <!-- Mobile Header with Year Selector (AC-3.5.1) -->
+    @if (showBottomNav()) {
+      <mat-toolbar class="mobile-header" color="primary">
+        <span class="header-title">Property Manager</span>
+        <span class="spacer"></span>
+        <app-year-selector class="light-theme" />
+      </mat-toolbar>
+    }
+
+    <main class="content-area" [class.with-tablet-header]="showMenuButton()" [class.with-mobile-header]="showBottomNav()">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>
+
+<!-- Mobile Bottom Navigation (AC7.5) -->
+@if (showBottomNav()) {
+  <app-bottom-nav />
+}

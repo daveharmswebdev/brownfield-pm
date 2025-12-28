@@ -1,0 +1,32 @@
+<!-- Mobile Bottom Navigation (AC7.5) -->
+<nav class="bottom-nav" aria-label="Mobile navigation">
+  @for (item of navItems; track item.route) {
+    <a
+      [routerLink]="item.route"
+      routerLinkActive="active"
+      class="nav-tab"
+      [attr.data-testid]="'bottom-nav-' + item.label.toLowerCase()"
+    >
+      @if (item.badge !== null && item.badge !== undefined && item.badge > 0) {
+        <mat-icon [matBadge]="item.badge" matBadgeColor="accent" matBadgeSize="small">
+          {{ item.icon }}
+        </mat-icon>
+      } @else {
+        <mat-icon>{{ item.icon }}</mat-icon>
+      }
+      <span class="nav-label">{{ item.label }}</span>
+    </a>
+  }
+</nav>
+
+<!-- FAB for quick actions - placeholder (AC7.5) -->
+<button
+  mat-fab
+  class="quick-action-fab"
+  color="accent"
+  (click)="onFabClick()"
+  aria-label="Quick action"
+  data-testid="quick-action-fab"
+>
+  <mat-icon>add</mat-icon>
+</button>

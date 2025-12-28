@@ -1,0 +1,330 @@
+// Property Manager Custom Theme - Forest Green
+// Based on UX Design Specification Section 3.1 Color System
+// https://material.angular.dev/guide/theming
+
+@use 'sass:map';
+@use '@angular/material' as mat;
+
+// Custom Forest Green Palette (Primary)
+// Primary: #66BB6A, Primary Dark: #4CAF50, Primary Light: #A5D6A7
+$forest-green-palette: (
+  0: #000000,
+  10: #002106,
+  20: #00390f,
+  25: #004514,
+  30: #005319,
+  35: #00611f,
+  40: #4CAF50, // Primary Dark - hover/emphasis
+  50: #66BB6A, // Primary - main color
+  60: #81C784,
+  70: #A5D6A7, // Primary Light - mint
+  80: #C8E6C9,
+  90: #E8F5E9,
+  95: #F1F8E9,
+  98: #F9FBE7,
+  99: #FDFFE6,
+  100: #FFFFFF,
+  secondary: (
+    0: #000000,
+    10: #0d1f12,
+    20: #223526,
+    25: #2d4030,
+    30: #384b3c,
+    35: #435747,
+    40: #4f6352,
+    50: #677c6a,
+    60: #809683,
+    70: #9ab19d,
+    80: #b5ccb8,
+    90: #d1e8d3,
+    95: #dff6e1,
+    98: #e8feea,
+    99: #f6fff2,
+    100: #FFFFFF,
+  ),
+  neutral: (
+    0: #000000,
+    4: #0c0f0c,
+    6: #111411,
+    10: #191c19,
+    12: #1d201d,
+    17: #272b27,
+    20: #2e312e,
+    22: #323632,
+    24: #373a37,
+    25: #393c39,
+    30: #444744,
+    35: #50534f,
+    40: #5c5f5b,
+    50: #757874,
+    60: #8f918d,
+    70: #a9aca7,
+    80: #c5c7c2,
+    87: #d9dbd6,
+    90: #e1e3de,
+    92: #e7e9e4,
+    94: #edefea,
+    95: #eff1ec,
+    96: #f2f4ef,
+    98: #f8faf5,
+    99: #FAFAFA, // Background - off-white
+    100: #FFFFFF,
+  ),
+  neutral-variant: (
+    0: #000000,
+    10: #171d17,
+    20: #2c322b,
+    25: #373d36,
+    30: #424841,
+    35: #4e544c,
+    40: #5a6058,
+    50: #727970,
+    60: #8c9389,
+    70: #a7ada4,
+    80: #c2c9bf,
+    90: #dee5da,
+    95: #ecf3e8,
+    98: #f5fcf0,
+    99: #f8fff2,
+    100: #FFFFFF,
+  ),
+  error: (
+    0: #000000,
+    10: #410002,
+    20: #690005,
+    25: #7e0007,
+    30: #93000a,
+    35: #a80710,
+    40: #ba1a1a,
+    50: #de3730,
+    60: #ff5449,
+    70: #ff897d,
+    80: #ffb4ab,
+    90: #ffdad6,
+    95: #ffedea,
+    98: #fff8f7,
+    99: #fffbff,
+    100: #FFFFFF,
+  ),
+);
+
+// Custom Warm Orange Palette (Accent/Tertiary)
+// Accent: #FFA726
+$warm-orange-palette: (
+  0: #000000,
+  10: #2d1600,
+  20: #4a2800,
+  25: #593200,
+  30: #693c00,
+  35: #7a4700,
+  40: #8b5200,
+  50: #ad6900,
+  60: #cf8100,
+  70: #f29a00,
+  80: #FFA726, // Accent - warm orange
+  90: #ffdcbe,
+  95: #ffede4,
+  98: #fff8f5,
+  99: #fffbff,
+  100: #FFFFFF,
+  secondary: (
+    0: #000000,
+    10: #261a00,
+    20: #3f2e00,
+    25: #4c3800,
+    30: #594300,
+    35: #674f00,
+    40: #755b00,
+    50: #937300,
+    60: #b18c00,
+    70: #cfa600,
+    80: #eec11d,
+    90: #ffe08a,
+    95: #fff0c9,
+    98: #fff8f0,
+    99: #fffbff,
+    100: #FFFFFF,
+  ),
+  neutral: (
+    0: #000000,
+    4: #120d07,
+    6: #17120b,
+    10: #1f1b16,
+    12: #231f1a,
+    17: #2e2923,
+    20: #34302a,
+    22: #39342e,
+    24: #3d3933,
+    25: #403b35,
+    30: #4b4640,
+    35: #57524b,
+    40: #635e57,
+    50: #7c766f,
+    60: #968f88,
+    70: #b1aaa2,
+    80: #cdc5bd,
+    87: #dfd7cf,
+    90: #e9e1d9,
+    92: #efe7df,
+    94: #f5ede5,
+    95: #f8f0e8,
+    96: #fbf3eb,
+    98: #fff8f5,
+    99: #fffbff,
+    100: #FFFFFF,
+  ),
+  neutral-variant: (
+    0: #000000,
+    10: #231a11,
+    20: #392f25,
+    25: #453a30,
+    30: #51453a,
+    35: #5d5146,
+    40: #695d51,
+    50: #837569,
+    60: #9d8f82,
+    70: #b9a99c,
+    80: #d5c4b6,
+    90: #f2e0d2,
+    95: #ffede4,
+    98: #fff8f5,
+    99: #fffbff,
+    100: #FFFFFF,
+  ),
+  error: (
+    0: #000000,
+    10: #410002,
+    20: #690005,
+    25: #7e0007,
+    30: #93000a,
+    35: #a80710,
+    40: #ba1a1a,
+    50: #de3730,
+    60: #ff5449,
+    70: #ff897d,
+    80: #ffb4ab,
+    90: #ffdad6,
+    95: #ffedea,
+    98: #fff8f7,
+    99: #fffbff,
+    100: #FFFFFF,
+  ),
+);
+
+// Apply theme with Forest Green as primary and Warm Orange as tertiary
+html {
+  @include mat.theme((
+    color: (
+      primary: $forest-green-palette,
+      tertiary: $warm-orange-palette,
+    ),
+    // System fonts per UX spec - clean, modern stack
+    typography: (
+      plain-family: (-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif),
+      brand-family: (-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif),
+    ),
+    density: 0,
+  ));
+}
+
+// Custom CSS variables for app-specific theming
+:root {
+  // Primary colors (Forest Green)
+  --pm-primary: #66BB6A;
+  --pm-primary-dark: #4CAF50;
+  --pm-primary-light: #A5D6A7;
+
+  // Accent color (Warm Orange)
+  --pm-accent: #FFA726;
+
+  // Background colors
+  --pm-background: #FAFAFA;
+  --pm-surface: #FFFFFF;
+
+  // Text colors
+  --pm-text-primary: #33691E;
+  --pm-text-secondary: #5D4037;
+
+  // Sidebar (dark theme)
+  --pm-sidebar-bg: #1E1E1E;
+  --pm-sidebar-text: #E0E0E0;
+  --pm-sidebar-hover: #2D2D2D;
+  --pm-sidebar-active-bg: rgba(102, 187, 106, 0.15);
+  --pm-sidebar-active-border: #66BB6A;
+
+  // Softer elevation shadows (friendly feel per UX spec)
+  --pm-shadow-1: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --pm-shadow-2: 0 2px 6px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --pm-shadow-3: 0 4px 12px rgba(0, 0, 0, 0.10), 0 2px 4px rgba(0, 0, 0, 0.06);
+
+  // Breakpoints (for reference in JS - CSS uses media queries)
+  --pm-breakpoint-mobile: 768px;
+  --pm-breakpoint-desktop: 1024px;
+
+  // Navigation dimensions
+  --pm-sidebar-width: 240px;
+  --pm-bottom-nav-height: 56px;
+}
+
+body {
+  // Light color scheme
+  color-scheme: light;
+
+  // Use off-white background per UX spec
+  background-color: var(--pm-background);
+  color: var(--pm-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+
+  // Reset margin
+  margin: 0;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+// Global link styling with Forest Green
+a {
+  color: var(--pm-primary-dark);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--pm-primary);
+    text-decoration: underline;
+  }
+}
+
+// Override Angular Material elevation for softer shadows
+.mat-elevation-z1 { box-shadow: var(--pm-shadow-1) !important; }
+.mat-elevation-z2, .mat-elevation-z3, .mat-elevation-z4 { box-shadow: var(--pm-shadow-2) !important; }
+.mat-elevation-z5, .mat-elevation-z6, .mat-elevation-z7, .mat-elevation-z8 { box-shadow: var(--pm-shadow-3) !important; }
+
+// Confirmation dialog panel - remove default Material padding so component controls it
+.confirm-dialog-panel {
+  .mat-mdc-dialog-container {
+    .mdc-dialog__surface {
+      padding: 0;
+      overflow: hidden;
+    }
+  }
+}
+
+// Year selector dropdown panel - ensure full year is visible
+.year-selector-panel {
+  min-width: 100px !important;
+
+  .mat-mdc-option {
+    min-width: 90px;
+
+    .mdc-list-item__primary-text {
+      overflow: visible !important;
+      text-overflow: clip !important;
+    }
+
+    // Hide checkmark - green highlight is sufficient indicator
+    .mat-pseudo-checkbox {
+      display: none !important;
+    }
+  }
+}

@@ -1,0 +1,41 @@
+<div class="verify-email-container">
+  <mat-card class="verify-email-card">
+    @switch (state()) {
+      @case ('loading') {
+        <mat-card-content class="state-content">
+          <mat-spinner diameter="48"></mat-spinner>
+          <h2>Verifying your email...</h2>
+          <p>Please wait while we confirm your email address.</p>
+        </mat-card-content>
+      }
+
+      @case ('success') {
+        <mat-card-content class="state-content success">
+          <mat-icon class="state-icon success-icon">check_circle</mat-icon>
+          <h2>Email Verified!</h2>
+          <p>Your email has been successfully verified.</p>
+          <p class="redirect-note">Redirecting to login page...</p>
+          <a mat-raised-button color="primary" routerLink="/login">
+            Go to Login
+          </a>
+        </mat-card-content>
+      }
+
+      @case ('error') {
+        <mat-card-content class="state-content error">
+          <mat-icon class="state-icon error-icon">error</mat-icon>
+          <h2>Verification Failed</h2>
+          <p>{{ errorMessage() }}</p>
+          <div class="action-buttons">
+            <a mat-raised-button color="primary" routerLink="/register">
+              Register Again
+            </a>
+            <a mat-stroked-button routerLink="/login">
+              Go to Login
+            </a>
+          </div>
+        </mat-card-content>
+      }
+    }
+  </mat-card>
+</div>
