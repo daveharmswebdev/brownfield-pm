@@ -1,0 +1,62 @@
+{
+  "workflow_version": "1.2.0",
+  "timestamps": {
+    "started": "2025-12-28T15:00:00Z",
+    "last_updated": "2025-12-28T15:20:00Z",
+    "completed": "2025-12-28T15:20:00Z"
+  },
+  "mode": "initial_scan",
+  "scan_level": "deep",
+  "project_root": "/Users/walterharms/workspace/bmad/brownfield-pm",
+  "output_folder": "/Users/walterharms/workspace/bmad/brownfield-pm/docs",
+  "repository_type": "multi-part",
+  "project_types": [
+    {
+      "part_id": "frontend",
+      "project_type_id": "web",
+      "display_name": "Angular 20 Web Application",
+      "root_path": "frontend/"
+    },
+    {
+      "part_id": "backend",
+      "project_type_id": "backend",
+      "display_name": ".NET 10 Clean Architecture API",
+      "root_path": "backend/"
+    }
+  ],
+  "completed_steps": [
+    {"step": "step_1", "status": "completed", "timestamp": "2025-12-28T15:05:00Z", "summary": "Classified as multi-part with 2 parts"},
+    {"step": "step_2", "status": "completed", "timestamp": "2025-12-28T15:06:00Z", "summary": "Found 3 existing docs"},
+    {"step": "step_3", "status": "completed", "timestamp": "2025-12-28T15:08:00Z", "summary": "Tech stack: Angular 20 + .NET 10"},
+    {"step": "step_4", "status": "completed", "timestamp": "2025-12-28T15:12:00Z", "summary": "API scan: 6 controllers, Data: 8 entities, Components: 28"},
+    {"step": "step_5", "status": "completed", "timestamp": "2025-12-28T15:13:00Z", "summary": "Source tree documented"},
+    {"step": "step_6", "status": "completed", "timestamp": "2025-12-28T15:14:00Z", "summary": "Dev/deployment guides from README"},
+    {"step": "step_7", "status": "completed", "timestamp": "2025-12-28T15:15:00Z", "summary": "Integration architecture documented"},
+    {"step": "step_8", "status": "completed", "timestamp": "2025-12-28T15:16:00Z", "summary": "Architecture docs for both parts"},
+    {"step": "step_9", "status": "completed", "timestamp": "2025-12-28T15:17:00Z", "summary": "Supporting documentation generated"},
+    {"step": "step_10", "status": "completed", "timestamp": "2025-12-28T15:18:00Z", "summary": "Master index generated"},
+    {"step": "step_11", "status": "completed", "timestamp": "2025-12-28T15:19:00Z", "summary": "Validation complete"},
+    {"step": "step_12", "status": "completed", "timestamp": "2025-12-28T15:20:00Z", "summary": "Workflow complete"}
+  ],
+  "current_step": "completed",
+  "findings": {
+    "project_classification": "multi-part, 2 parts, Angular + .NET",
+    "existing_docs_count": 3,
+    "api_endpoints": 20,
+    "domain_entities": 8,
+    "frontend_components": 28,
+    "signal_stores": 5
+  },
+  "outputs_generated": [
+    "project-scan-report.json",
+    "api-contracts-backend.md",
+    "data-models-backend.md",
+    "component-inventory-frontend.md",
+    "source-tree-analysis.md",
+    "architecture-backend.md",
+    "architecture-frontend.md",
+    "integration-architecture.md",
+    "index.md"
+  ],
+  "resume_instructions": "Workflow complete - no resume needed"
+}
