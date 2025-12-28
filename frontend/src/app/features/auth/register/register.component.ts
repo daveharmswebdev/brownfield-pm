@@ -1,7 +1,7 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -28,19 +28,21 @@ import { AuthService, ValidationError } from '../../../core/services/auth.servic
   templateUrl: './register.component.html',
   styleUrl: './register.component.scss',
 })
-export class RegisterComponent {
+export class RegisterComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly loading = signal(false);
   protected readonly success = signal(false);
   protected readonly serverErrors = signal<Record<string, string[]>>({});
   protected readonly hidePassword = signal(true);
   protected readonly hideConfirmPassword = signal(true);
+  protected readonly invitationToken = signal<string | null>(null);
+  protected readonly tokenError = signal<string | null>(null);
 
   protected readonly form: FormGroup = this.fb.group({
-    email: ['', [Validators.required, Validators.email]],
     password: ['', [
       Validators.required,
       Validators.minLength(8),
@@ -50,8 +52,17 @@ export class RegisterComponent {
       Validators.pattern(/[!@#$%^&*()_+\-=\[\]{}|;':",.<>\/?]/), // At least one special char
     ]],
     confirmPassword: ['', [Validators.required]],
-    accountName: ['', [Validators.required, Validators.maxLength(255)]],
   });
+
+  ngOnInit(): void {
+    // Read invitation token from query params
+    const token = this.route.snapshot.queryParamMap.get('token');
+    if (token) {
+      this.invitationToken.set(token);
+    } else {
+      this.tokenError.set('No invitation token provided. Please use the link from your invitation email.');
+    }
+  }
 
   protected getPasswordErrors(): string[] {
     const errors: string[] = [];
@@ -84,6 +95,12 @@ export class RegisterComponent {
   }
 
   protected onSubmit(): void {
+    const token = this.invitationToken();
+    if (!token) {
+      this.tokenError.set('No invitation token provided.');
+      return;
+    }
+
     if (!this.form.valid || !this.passwordsMatch()) {
       this.form.markAllAsTouched();
       return;
@@ -92,9 +109,9 @@ export class RegisterComponent {
     this.loading.set(true);
     this.serverErrors.set({});
 
-    const { email, password, accountName } = this.form.value;
+    const { password } = this.form.value;
 
-    this.authService.register({ email, password, name: accountName }).subscribe({
+    this.authService.register({ password, token }).subscribe({
       next: () => {
         this.loading.set(false);
         this.success.set(true);

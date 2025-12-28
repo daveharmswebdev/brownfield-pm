@@ -16,6 +16,7 @@ public interface IAppDbContext
     DbSet<IncomeEntity> Income { get; }
     DbSet<Receipt> Receipts { get; }
     DbSet<ExpenseCategory> ExpenseCategories { get; }
+    DbSet<Invitation> Invitations { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

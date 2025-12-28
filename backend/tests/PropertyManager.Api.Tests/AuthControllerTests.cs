@@ -1,10 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using FluentAssertions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using PropertyManager.Application.Common.Interfaces;
+using PropertyManager.Domain.Entities;
 using PropertyManager.Infrastructure.Identity;
 using PropertyManager.Infrastructure.Persistence;
 
@@ -21,41 +24,197 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
         _client = factory.CreateClient();
     }
 
+    // ==================== INVITATION TESTS ====================
+
     [Fact]
-    public async Task Register_WithValidData_Returns201()
+    public async Task SendInvitation_WithValidEmail_Returns200()
     {
-        // Arrange
-        var request = new
-        {
-            Email = $"test{Guid.NewGuid():N}@example.com",
-            Password = "Test@123456",
-            Name = "Test Account"
-        };
+        // Arrange - Need an authenticated Owner user to send invitations
+        var (ownerEmail, ownerPassword, _) = await CreateOwnerUser();
+        var accessToken = await LoginAndGetToken(ownerEmail, ownerPassword);
+
+        var inviteeEmail = $"invitee{Guid.NewGuid():N}@example.com";
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/v1/auth/register", request);
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/invite");
+        request.Headers.Add("Authorization", $"Bearer {accessToken}");
+        request.Content = JsonContent.Create(new { Email = inviteeEmail });
+
+        var response = await _client.SendAsync(request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var content = await response.Content.ReadFromJsonAsync<SendInvitationResponse>();
+        content.Should().NotBeNull();
+        content!.Success.Should().BeTrue();
+
+        // Verify invitation email was sent
+        var fakeEmailService = _factory.Services.GetRequiredService<FakeEmailService>();
+        var sentEmail = fakeEmailService.SentInvitationEmails.FirstOrDefault(e => e.Email == inviteeEmail);
+        sentEmail.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task SendInvitation_WithoutAuth_Returns401()
+    {
+        // Arrange
+        var inviteeEmail = $"invitee{Guid.NewGuid():N}@example.com";
+
+        // Act - No Authorization header
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/invite", new { Email = inviteeEmail });
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task SendInvitation_WithInvalidEmail_Returns400()
+    {
+        // Arrange
+        var (ownerEmail, ownerPassword, _) = await CreateOwnerUser();
+        var accessToken = await LoginAndGetToken(ownerEmail, ownerPassword);
+
+        // Act
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/invite");
+        request.Headers.Add("Authorization", $"Bearer {accessToken}");
+        request.Content = JsonContent.Create(new { Email = "not-an-email" });
+
+        var response = await _client.SendAsync(request);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    // ==================== REGISTRATION WITH INVITATION TESTS ====================
+
+    [Fact]
+    public async Task Register_WithValidInvitationToken_Returns201()
+    {
+        // Arrange - Create owner, send invitation, get token
+        var (ownerEmail, ownerPassword, _) = await CreateOwnerUser();
+        var inviteeEmail = $"newuser{Guid.NewGuid():N}@example.com";
+
+        var invitationToken = await SendInvitationAndGetToken(ownerEmail, ownerPassword, inviteeEmail);
+
+        var registerRequest = new { Password = "Test@123456", Token = invitationToken };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
 
         var content = await response.Content.ReadFromJsonAsync<RegisterResponse>();
         content.Should().NotBeNull();
-        content!.UserId.Should().NotBeEmpty();
+        content!.UserId.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task Register_WithInvitation_UserIsAutoVerified()
+    {
+        // Arrange
+        var (ownerEmail, ownerPassword, _) = await CreateOwnerUser();
+        var inviteeEmail = $"autoverify{Guid.NewGuid():N}@example.com";
+
+        var invitationToken = await SendInvitationAndGetToken(ownerEmail, ownerPassword, inviteeEmail);
+
+        // Register
+        var registerRequest = new { Password = "Test@123456", Token = invitationToken };
+        var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
+        registerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+
+        // Act - Try to login immediately (should work since email is auto-verified)
+        var loginRequest = new { Email = inviteeEmail, Password = "Test@123456" };
+        var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
+
+        // Assert - Login should succeed without email verification
+        loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task Register_WithoutToken_Returns400()
+    {
+        // Arrange - Missing token
+        var registerRequest = new { Password = "Test@123456" };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task Register_WithInvalidToken_Returns400()
+    {
+        // Arrange
+        var registerRequest = new { Password = "Test@123456", Token = "invalid-token-12345" };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var content = await response.Content.ReadAsStringAsync();
+        content.ToLower().Should().Contain("invalid or expired");
+    }
+
+    [Fact]
+    public async Task Register_WithExpiredToken_Returns400()
+    {
+        // Arrange - Create an expired invitation directly in DB
+        var (_, _, accountId) = await CreateOwnerUser();
+        var expiredEmail = $"expired{Guid.NewGuid():N}@example.com";
+        var token = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
+        var tokenHash = ComputeTokenHash(token);
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            // Get any user ID for InvitedByUserId
+            var invitingUser = await dbContext.Users.FirstAsync();
+
+            var invitation = new Invitation
+            {
+                AccountId = accountId,
+                Email = expiredEmail,
+                TokenHash = tokenHash,
+                InvitedByUserId = invitingUser.Id,
+                ExpiresAt = DateTime.UtcNow.AddHours(-1), // Expired
+                CreatedAt = DateTime.UtcNow.AddHours(-25)
+            };
+            dbContext.Invitations.Add(invitation);
+            await dbContext.SaveChangesAsync();
+        }
+
+        var registerRequest = new { Password = "Test@123456", Token = token };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var content = await response.Content.ReadAsStringAsync();
+        content.ToLower().Should().Contain("invalid or expired");
     }
 
     [Fact]
     public async Task Register_WithWeakPassword_Returns400WithValidationErrors()
     {
         // Arrange
-        var request = new
-        {
-            Email = $"test{Guid.NewGuid():N}@example.com",
-            Password = "weak", // Too short, no uppercase, no number, no special char
-            Name = "Test Account"
-        };
+        var (ownerEmail, ownerPassword, _) = await CreateOwnerUser();
+        var inviteeEmail = $"weakpwd{Guid.NewGuid():N}@example.com";
+
+        var invitationToken = await SendInvitationAndGetToken(ownerEmail, ownerPassword, inviteeEmail);
+
+        var registerRequest = new { Password = "weak", Token = invitationToken };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/v1/auth/register", request);
+        var response = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
@@ -65,136 +224,24 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
     }
 
     [Fact]
-    public async Task Register_WithDuplicateEmail_Returns400()
+    public async Task Register_TokenCanOnlyBeUsedOnce()
     {
         // Arrange
-        var email = $"duplicate{Guid.NewGuid():N}@example.com";
-        var request1 = new
-        {
-            Email = email,
-            Password = "Test@123456",
-            Name = "Test Account 1"
-        };
-        var request2 = new
-        {
-            Email = email,
-            Password = "Test@123456",
-            Name = "Test Account 2"
-        };
+        var (ownerEmail, ownerPassword, _) = await CreateOwnerUser();
+        var inviteeEmail = $"onceonly{Guid.NewGuid():N}@example.com";
+
+        var invitationToken = await SendInvitationAndGetToken(ownerEmail, ownerPassword, inviteeEmail);
 
         // First registration should succeed
-        var response1 = await _client.PostAsJsonAsync("/api/v1/auth/register", request1);
-        response1.StatusCode.Should().Be(HttpStatusCode.Created);
+        var firstRegisterRequest = new { Password = "Test@123456", Token = invitationToken };
+        var firstResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", firstRegisterRequest);
+        firstResponse.StatusCode.Should().Be(HttpStatusCode.Created);
 
-        // Act - second registration with same email
-        var response2 = await _client.PostAsJsonAsync("/api/v1/auth/register", request2);
+        // Act - Try to use the same token again
+        var secondRegisterRequest = new { Password = "Test@789012", Token = invitationToken };
+        var secondResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", secondRegisterRequest);
 
-        // Assert
-        response2.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-
-        var content = await response2.Content.ReadAsStringAsync();
-        content.Should().Contain("email");
-    }
-
-    [Fact]
-    public async Task VerifyEmail_WithValidToken_Returns204()
-    {
-        // Arrange - Register a user first
-        var email = $"verify{Guid.NewGuid():N}@example.com";
-        var registerRequest = new
-        {
-            Email = email,
-            Password = "Test@123456",
-            Name = "Test Account"
-        };
-
-        var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
-        registerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
-
-        var registerContent = await registerResponse.Content.ReadFromJsonAsync<RegisterResponse>();
-        var userId = registerContent!.UserId;
-
-        // Get the verification token from the fake email service (singleton)
-        var fakeEmailService = _factory.Services.GetRequiredService<FakeEmailService>();
-        var sentEmail = fakeEmailService.SentVerificationEmails.FirstOrDefault(e => e.Email == email);
-        sentEmail.Should().NotBeNull($"Verification email should have been sent to {email}");
-
-        var token = sentEmail!.Token;
-
-        // Act
-        var verifyRequest = new { Token = token };
-        var response = await _client.PostAsJsonAsync("/api/v1/auth/verify-email", verifyRequest);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
-
-        // Verify user is now confirmed
-        using var scope = _factory.Services.CreateScope();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        var verifiedUser = await userManager.FindByIdAsync(userId);
-        verifiedUser!.EmailConfirmed.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task VerifyEmail_WithInvalidToken_Returns400()
-    {
-        // Arrange
-        var invalidToken = Convert.ToBase64String(
-            System.Text.Encoding.UTF8.GetBytes($"{Guid.NewGuid()}:invalidtoken"));
-
-        var request = new { Token = invalidToken };
-
-        // Act
-        var response = await _client.PostAsJsonAsync("/api/v1/auth/verify-email", request);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task VerifyEmail_WithMalformedToken_Returns400()
-    {
-        // Arrange
-        var request = new { Token = "not-a-valid-base64-token!" };
-
-        // Act
-        var response = await _client.PostAsJsonAsync("/api/v1/auth/verify-email", request);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task VerifyEmail_WithAlreadyVerifiedToken_Returns400()
-    {
-        // Arrange - Register and verify a user
-        var email = $"alreadyverified{Guid.NewGuid():N}@example.com";
-        var registerRequest = new
-        {
-            Email = email,
-            Password = "Test@123456",
-            Name = "Test Account"
-        };
-
-        var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
-        registerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
-
-        // Get the verification token from the fake email service (singleton)
-        var fakeEmailService = _factory.Services.GetRequiredService<FakeEmailService>();
-        var sentEmail = fakeEmailService.SentVerificationEmails.FirstOrDefault(e => e.Email == email);
-        sentEmail.Should().NotBeNull();
-
-        var token = sentEmail!.Token;
-
-        // First verification
-        var verifyRequest = new { Token = token };
-        var firstResponse = await _client.PostAsJsonAsync("/api/v1/auth/verify-email", verifyRequest);
-        firstResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
-
-        // Act - Try to verify again with same token
-        var secondResponse = await _client.PostAsJsonAsync("/api/v1/auth/verify-email", verifyRequest);
-
-        // Assert
+        // Assert - Token should be invalid after first use
         secondResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
@@ -203,11 +250,11 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
     [Fact]
     public async Task Login_WithValidCredentials_Returns200WithJwtToken()
     {
-        // Arrange - Create and verify a user
+        // Arrange - Create a verified user via invitation
         var email = $"login{Guid.NewGuid():N}@example.com";
         var password = "Test@123456";
 
-        await CreateAndVerifyUser(email, password);
+        await CreateVerifiedUser(email, password);
 
         var loginRequest = new { Email = email, Password = password };
 
@@ -233,11 +280,11 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
     [Fact]
     public async Task Login_WithInvalidPassword_Returns401WithGenericMessage()
     {
-        // Arrange - Create and verify a user
+        // Arrange
         var email = $"loginwrongpwd{Guid.NewGuid():N}@example.com";
         var password = "Test@123456";
 
-        await CreateAndVerifyUser(email, password);
+        await CreateVerifiedUser(email, password);
 
         var loginRequest = new { Email = email, Password = "WrongPassword@123" };
 
@@ -271,33 +318,6 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
 
         var content = await response.Content.ReadAsStringAsync();
         content.Should().Contain("Invalid email or password");
-    }
-
-    [Fact]
-    public async Task Login_WithUnverifiedEmail_Returns401WithSpecificMessage()
-    {
-        // Arrange - Create user but DON'T verify
-        var email = $"unverified{Guid.NewGuid():N}@example.com";
-        var registerRequest = new
-        {
-            Email = email,
-            Password = "Test@123456",
-            Name = "Test Account"
-        };
-
-        var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
-        registerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
-
-        var loginRequest = new { Email = email, Password = "Test@123456" };
-
-        // Act
-        var response = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
-
-        // Assert (AC4.4)
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-
-        var content = await response.Content.ReadAsStringAsync();
-        content.ToLower().Should().Contain("verify your email");
     }
 
     [Fact]
@@ -335,7 +355,7 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
         var email = $"jwtclaims{Guid.NewGuid():N}@example.com";
         var password = "Test@123456";
 
-        await CreateAndVerifyUser(email, password);
+        await CreateVerifiedUser(email, password);
 
         var loginRequest = new { Email = email, Password = password };
 
@@ -373,7 +393,7 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
         var email = $"refresh{Guid.NewGuid():N}@example.com";
         var password = "Test@123456";
 
-        await CreateAndVerifyUser(email, password);
+        await CreateVerifiedUser(email, password);
 
         var loginRequest = new { Email = email, Password = password };
         var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
@@ -433,11 +453,11 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
     [Fact]
     public async Task Login_MultipleTimes_CreatesSeparateSessions()
     {
-        // Arrange - Create and verify a user
+        // Arrange - Create a verified user
         var email = $"concurrent{Guid.NewGuid():N}@example.com";
         var password = "Test@123456";
 
-        await CreateAndVerifyUser(email, password);
+        await CreateVerifiedUser(email, password);
 
         var loginRequest = new { Email = email, Password = password };
 
@@ -472,7 +492,7 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
         var email = $"logout{Guid.NewGuid():N}@example.com";
         var password = "Test@123456";
 
-        await CreateAndVerifyUser(email, password);
+        await CreateVerifiedUser(email, password);
 
         var loginRequest = new { Email = email, Password = password };
         var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
@@ -503,7 +523,7 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
         var email = $"logoutdb{Guid.NewGuid():N}@example.com";
         var password = "Test@123456";
 
-        await CreateAndVerifyUser(email, password);
+        await CreateVerifiedUser(email, password);
 
         var loginRequest = new { Email = email, Password = password };
         var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
@@ -557,7 +577,7 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
         var email = $"logoutrefresh{Guid.NewGuid():N}@example.com";
         var password = "Test@123456";
 
-        await CreateAndVerifyUser(email, password);
+        await CreateVerifiedUser(email, password);
 
         var loginRequest = new { Email = email, Password = password };
         var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
@@ -604,11 +624,11 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
     [Fact]
     public async Task Logout_MultipleDevices_OnlyCurrentDeviceAffected()
     {
-        // Arrange - Create and verify a user
+        // Arrange - Create a verified user
         var email = $"logoutmulti{Guid.NewGuid():N}@example.com";
         var password = "Test@123456";
 
-        await CreateAndVerifyUser(email, password);
+        await CreateVerifiedUser(email, password);
 
         var loginRequest = new { Email = email, Password = password };
 
@@ -648,11 +668,11 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
     [Fact]
     public async Task ForgotPassword_WithValidEmail_Returns204()
     {
-        // Arrange - Create and verify a user
+        // Arrange - Create a verified user
         var email = $"forgot{Guid.NewGuid():N}@example.com";
         var password = "Test@123456";
 
-        await CreateAndVerifyUser(email, password);
+        await CreateVerifiedUser(email, password);
 
         var request = new { Email = email };
 
@@ -703,12 +723,12 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
     [Fact]
     public async Task ResetPassword_WithValidToken_Returns204()
     {
-        // Arrange - Create, verify user, then request password reset
+        // Arrange - Create verified user, then request password reset
         var email = $"reset{Guid.NewGuid():N}@example.com";
         var oldPassword = "Test@123456";
         var newPassword = "NewPass@789012";
 
-        await CreateAndVerifyUser(email, oldPassword);
+        await CreateVerifiedUser(email, oldPassword);
 
         // Request password reset
         await _client.PostAsJsonAsync("/api/v1/auth/forgot-password", new { Email = email });
@@ -738,7 +758,7 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
     {
         // Arrange
         var invalidToken = Convert.ToBase64String(
-            System.Text.Encoding.UTF8.GetBytes($"{Guid.NewGuid()}:invalidtoken"));
+            Encoding.UTF8.GetBytes($"{Guid.NewGuid()}:invalidtoken"));
 
         var request = new { Token = invalidToken, NewPassword = "NewPass@789012" };
 
@@ -755,11 +775,11 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
     [Fact]
     public async Task ResetPassword_WithWeakPassword_Returns400()
     {
-        // Arrange - Create, verify user, then request password reset
+        // Arrange - Create verified user, then request password reset
         var email = $"resetweak{Guid.NewGuid():N}@example.com";
         var oldPassword = "Test@123456";
 
-        await CreateAndVerifyUser(email, oldPassword);
+        await CreateVerifiedUser(email, oldPassword);
 
         // Request password reset
         await _client.PostAsJsonAsync("/api/v1/auth/forgot-password", new { Email = email });
@@ -784,12 +804,12 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
     [Fact]
     public async Task ResetPassword_InvalidatesAllSessions()
     {
-        // Arrange - Create, verify user, login, then reset password
+        // Arrange - Create verified user, login, then reset password
         var email = $"resetsession{Guid.NewGuid():N}@example.com";
         var oldPassword = "Test@123456";
         var newPassword = "NewPass@789012";
 
-        await CreateAndVerifyUser(email, oldPassword);
+        await CreateVerifiedUser(email, oldPassword);
 
         // Login to create a session
         var loginRequest = new { Email = email, Password = oldPassword };
@@ -832,7 +852,7 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
         var newPassword1 = "NewPass@789012";
         var newPassword2 = "AnotherPass@345678";
 
-        await CreateAndVerifyUser(email, oldPassword);
+        await CreateVerifiedUser(email, oldPassword);
 
         // Request password reset
         await _client.PostAsJsonAsync("/api/v1/auth/forgot-password", new { Email = email });
@@ -860,28 +880,96 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
 
     // ==================== HELPER METHODS ====================
 
-    private async Task CreateAndVerifyUser(string email, string password)
+    /// <summary>
+    /// Creates an owner user directly in the database (bypasses invitation).
+    /// Used to bootstrap tests that need an owner to send invitations.
+    /// </summary>
+    private async Task<(string email, string password, Guid accountId)> CreateOwnerUser()
     {
-        // Register
-        var registerRequest = new
+        var email = $"owner{Guid.NewGuid():N}@example.com";
+        var password = "Test@123456";
+
+        using var scope = _factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        // Create account
+        var account = new Account { Name = email.Split('@')[0] };
+        dbContext.Accounts.Add(account);
+        await dbContext.SaveChangesAsync();
+
+        // Create user with email confirmed
+        var user = new ApplicationUser
         {
+            UserName = email,
             Email = email,
-            Password = password,
-            Name = "Test Account"
+            EmailConfirmed = true,
+            AccountId = account.Id,
+            Role = "Owner"
         };
 
+        var result = await userManager.CreateAsync(user, password);
+        result.Succeeded.Should().BeTrue($"User creation failed: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+
+        return (email, password, account.Id);
+    }
+
+    /// <summary>
+    /// Creates a verified user via the invitation flow.
+    /// </summary>
+    private async Task CreateVerifiedUser(string email, string password)
+    {
+        // Create an owner to send the invitation
+        var (ownerEmail, ownerPassword, _) = await CreateOwnerUser();
+
+        // Send invitation and get token
+        var invitationToken = await SendInvitationAndGetToken(ownerEmail, ownerPassword, email);
+
+        // Register with the invitation token
+        var registerRequest = new { Password = password, Token = invitationToken };
         var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
         registerResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+    }
 
-        // Get verification token
+    /// <summary>
+    /// Sends an invitation and returns the token from the fake email service.
+    /// </summary>
+    private async Task<string> SendInvitationAndGetToken(string ownerEmail, string ownerPassword, string inviteeEmail)
+    {
+        var accessToken = await LoginAndGetToken(ownerEmail, ownerPassword);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/invite");
+        request.Headers.Add("Authorization", $"Bearer {accessToken}");
+        request.Content = JsonContent.Create(new { Email = inviteeEmail });
+
+        var response = await _client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Get the invitation token from the fake email service
         var fakeEmailService = _factory.Services.GetRequiredService<FakeEmailService>();
-        var sentEmail = fakeEmailService.SentVerificationEmails.FirstOrDefault(e => e.Email == email);
-        sentEmail.Should().NotBeNull();
+        var sentEmail = fakeEmailService.SentInvitationEmails.FirstOrDefault(e => e.Email == inviteeEmail);
+        sentEmail.Should().NotBeNull($"Invitation email should have been sent to {inviteeEmail}");
 
-        // Verify email
-        var verifyRequest = new { Token = sentEmail!.Token };
-        var verifyResponse = await _client.PostAsJsonAsync("/api/v1/auth/verify-email", verifyRequest);
-        verifyResponse.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        return sentEmail!.Token;
+    }
+
+    /// <summary>
+    /// Logs in and returns the access token.
+    /// </summary>
+    private async Task<string> LoginAndGetToken(string email, string password)
+    {
+        var loginRequest = new { Email = email, Password = password };
+        var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
+        loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var content = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        return content!.AccessToken;
+    }
+
+    private static string ComputeTokenHash(string token)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
     private Dictionary<string, object?> DecodeJwtPayload(string jwt)
@@ -893,7 +981,7 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
         // Add padding if needed
         var paddedPayload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
         var bytes = Convert.FromBase64String(paddedPayload);
-        var json = System.Text.Encoding.UTF8.GetString(bytes);
+        var json = Encoding.UTF8.GetString(bytes);
 
         return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object?>>(json)!;
     }
@@ -901,4 +989,5 @@ public class AuthControllerTests : IClassFixture<PropertyManagerWebApplicationFa
     private record RegisterResponse(string UserId);
     private record LoginResponse(string AccessToken, int ExpiresIn);
     private record RefreshResponse(string AccessToken, int ExpiresIn);
+    private record SendInvitationResponse(bool Success, string Message);
 }

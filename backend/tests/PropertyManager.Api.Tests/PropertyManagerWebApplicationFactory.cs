@@ -82,6 +82,7 @@ public class FakeEmailService : IEmailService
 {
     public List<(string Email, string Token)> SentVerificationEmails { get; } = [];
     public List<(string Email, string Token)> SentPasswordResetEmails { get; } = [];
+    public List<(string Email, string Token)> SentInvitationEmails { get; } = [];
 
     public Task SendVerificationEmailAsync(string email, string token, CancellationToken cancellationToken = default)
     {
@@ -92,6 +93,12 @@ public class FakeEmailService : IEmailService
     public Task SendPasswordResetEmailAsync(string email, string token, CancellationToken cancellationToken = default)
     {
         SentPasswordResetEmails.Add((email, token));
+        return Task.CompletedTask;
+    }
+
+    public Task SendInvitationEmailAsync(string email, string token, CancellationToken cancellationToken = default)
+    {
+        SentInvitationEmails.Add((email, token));
         return Task.CompletedTask;
     }
 }

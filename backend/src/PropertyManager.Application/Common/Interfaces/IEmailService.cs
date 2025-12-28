@@ -22,4 +22,13 @@ public interface IEmailService
         string email,
         string token,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sends an invitation email with the provided token.
+    /// Link format: {frontend_url}/register?token={token}
+    /// </summary>
+    Task SendInvitationEmailAsync(
+        string email,
+        string token,
+        CancellationToken cancellationToken = default);
 }

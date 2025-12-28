@@ -57,8 +57,11 @@ type Fixtures = {
   /**
    * Authenticated user fixture.
    *
-   * When used, automatically registers a new user, verifies email,
+   * When used, automatically registers a new user via invitation,
    * and logs in before the test runs. The test user data is returned.
+   *
+   * Note: This fixture requires E2E_SEED_OWNER_EMAIL and E2E_SEED_OWNER_PASSWORD
+   * environment variables to be set for invitation-based registration.
    */
   authenticatedUser: TestUser;
 };
@@ -110,18 +113,48 @@ export const test = base.extend<Fixtures>({
   /**
    * Authenticated user fixture.
    *
-   * This fixture handles the full authentication flow:
-   * 1. Generates unique test user data
-   * 2. Registers the user via the registration form
-   * 3. Retrieves email verification token from MailHog
-   * 4. Verifies the email address
-   * 5. Logs in with the verified credentials
+   * This fixture handles the full invitation-based authentication flow:
+   * 1. Uses seed owner to send an invitation
+   * 2. Registers the new user with the invitation token
+   * 3. Logs in with the credentials
    *
-   * The resulting user is logged in and ready for test interactions.
+   * Requires environment variables:
+   * - E2E_SEED_OWNER_EMAIL: Email of pre-seeded owner user
+   * - E2E_SEED_OWNER_PASSWORD: Password of pre-seeded owner user
+   *
+   * If seed owner credentials are not available, creates a test user
+   * directly via API (requires test database seeding).
    */
-  authenticatedUser: async ({ page, authHelper }, use) => {
-    const user = await authHelper.registerAndLogin();
-    await use(user);
+  authenticatedUser: async ({ page, authHelper, mailhog }, use) => {
+    const seedOwnerEmail = process.env.E2E_SEED_OWNER_EMAIL;
+    const seedOwnerPassword = process.env.E2E_SEED_OWNER_PASSWORD;
+
+    if (!seedOwnerEmail || !seedOwnerPassword) {
+      throw new Error(
+        'E2E tests require seed owner credentials. Set E2E_SEED_OWNER_EMAIL and E2E_SEED_OWNER_PASSWORD environment variables.'
+      );
+    }
+
+    // Login as seed owner to get access token
+    const accessToken = await authHelper.loginAndGetToken(seedOwnerEmail, seedOwnerPassword);
+
+    // Generate test user data
+    const testUser = {
+      accountName: `Test Account ${Date.now()}`,
+      email: `test-${Date.now()}@example.com`,
+      password: 'TestPassword123!',
+    };
+
+    // Send invitation
+    const invitationToken = await authHelper.sendInvitation(accessToken, testUser.email);
+
+    // Register with invitation token
+    await authHelper.registerWithInvitationToken(invitationToken, testUser.password);
+
+    // Login as the new user
+    await authHelper.login(testUser.email, testUser.password);
+
+    await use(testUser);
   },
 });
 

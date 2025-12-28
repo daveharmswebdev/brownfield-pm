@@ -1,17 +1,20 @@
+using System.Security.Cryptography;
+using System.Text;
 using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using PropertyManager.Application.Common.Interfaces;
 using PropertyManager.Domain.Entities;
 
 namespace PropertyManager.Application.Auth;
 
 /// <summary>
-/// Command for user registration.
+/// Command for user registration via invitation token.
+/// Invitation token replaces public registration.
 /// </summary>
 public record RegisterCommand(
-    string Email,
     string Password,
-    string AccountName
+    string InvitationToken
 ) : IRequest<RegisterResult>;
 
 /// <summary>
@@ -19,7 +22,7 @@ public record RegisterCommand(
 /// </summary>
 public record RegisterResult(
     Guid UserId,
-    bool RequiresEmailVerification = true
+    bool RequiresEmailVerification = false
 );
 
 /// <summary>
@@ -30,9 +33,8 @@ public class RegisterCommandValidator : AbstractValidator<RegisterCommand>
 {
     public RegisterCommandValidator()
     {
-        RuleFor(x => x.Email)
-            .NotEmpty().WithMessage("Email is required")
-            .EmailAddress().WithMessage("Invalid email format");
+        RuleFor(x => x.InvitationToken)
+            .NotEmpty().WithMessage("Invitation token is required");
 
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password is required")
@@ -41,16 +43,13 @@ public class RegisterCommandValidator : AbstractValidator<RegisterCommand>
             .Matches("[a-z]").WithMessage("Password must contain at least one lowercase letter")
             .Matches("[0-9]").WithMessage("Password must contain at least one number")
             .Matches(@"[!@#$%^&*()_+\-=\[\]{}|;':"",./<>?]").WithMessage("Password must contain at least one special character");
-
-        RuleFor(x => x.AccountName)
-            .NotEmpty().WithMessage("Account name is required")
-            .MaximumLength(255).WithMessage("Account name must be 255 characters or less");
     }
 }
 
 /// <summary>
 /// Handler for RegisterCommand.
-/// Creates Account, User via Identity, generates email verification token.
+/// Validates invitation token, creates Account, User via Identity.
+/// Invited users have email already verified.
 /// </summary>
 public class RegisterCommandHandler : IRequestHandler<RegisterCommand, RegisterResult>
 {
@@ -70,8 +69,27 @@ public class RegisterCommandHandler : IRequestHandler<RegisterCommand, RegisterR
 
     public async Task<RegisterResult> Handle(RegisterCommand request, CancellationToken cancellationToken)
     {
-        // Check if email already exists (AC3.3)
-        if (await _identityService.EmailExistsAsync(request.Email, cancellationToken))
+        // Hash the token for lookup
+        var tokenHash = HashToken(request.InvitationToken);
+
+        // Find the invitation by token hash (ignoring tenant filter since user isn't authenticated)
+        var invitation = await _dbContext.Invitations
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(i => i.TokenHash == tokenHash, cancellationToken);
+
+        // Validate invitation exists, is not expired, and not already used
+        if (invitation == null || invitation.IsExpired || invitation.IsAccepted)
+        {
+            throw new ValidationException(new[]
+            {
+                new FluentValidation.Results.ValidationFailure("InvitationToken", "This invitation link is invalid or expired")
+            });
+        }
+
+        var email = invitation.Email;
+
+        // Check if email already exists (shouldn't happen if invitation system is working correctly)
+        if (await _identityService.EmailExistsAsync(email, cancellationToken))
         {
             throw new ValidationException(new[]
             {
@@ -79,21 +97,25 @@ public class RegisterCommandHandler : IRequestHandler<RegisterCommand, RegisterR
             });
         }
 
+        // Derive account name from email (prefix before @)
+        var accountName = DeriveAccountNameFromEmail(email);
+
         // Create Account entity
         var account = new Account
         {
-            Name = request.AccountName
+            Name = accountName
         };
         _dbContext.Accounts.Add(account);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        // Create User via Identity with "Owner" role
+        // Create User via Identity with "Owner" role and email already confirmed
         var (userId, errors) = await _identityService.CreateUserAsync(
-            request.Email,
+            email,
             request.Password,
             account.Id,
             "Owner",
-            cancellationToken);
+            cancellationToken,
+            emailConfirmed: true); // Invitation = trusted email
 
         if (userId is null)
         {
@@ -105,10 +127,28 @@ public class RegisterCommandHandler : IRequestHandler<RegisterCommand, RegisterR
                 errors.Select(e => new FluentValidation.Results.ValidationFailure("Password", e)));
         }
 
-        // Generate email verification token and send email (AC3.4)
-        var token = await _identityService.GenerateEmailVerificationTokenAsync(userId.Value, cancellationToken);
-        await _emailService.SendVerificationEmailAsync(request.Email, token, cancellationToken);
+        // Mark invitation as accepted
+        invitation.AcceptedAt = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return new RegisterResult(userId.Value);
+        // No email verification needed for invited users
+        return new RegisterResult(userId.Value, RequiresEmailVerification: false);
+    }
+
+    private static string DeriveAccountNameFromEmail(string email)
+    {
+        var atIndex = email.IndexOf('@');
+        if (atIndex > 0)
+        {
+            return email[..atIndex];
+        }
+        return email;
+    }
+
+    private static string HashToken(string token)
+    {
+        var bytes = Encoding.UTF8.GetBytes(token);
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash).ToLowerInvariant();
     }
 }

@@ -60,6 +60,22 @@ export class MailHogHelper {
     return tokenMatch ? tokenMatch[1] : null;
   }
 
+  extractInvitationToken(message: MailHogMessage): string | null {
+    const body = this.decodeQuotedPrintable(message.Content.Body);
+    // Match token value from register link (/register?token=...)
+    const tokenMatch = body.match(/\/register\?token=([a-zA-Z0-9_%-]+)/);
+    return tokenMatch ? tokenMatch[1] : null;
+  }
+
+  async getInvitationToken(email: string): Promise<string> {
+    const message = await this.waitForEmail(email, 'invited');
+    const token = this.extractInvitationToken(message);
+    if (!token) {
+      throw new Error(`Could not extract invitation token from email to ${email}`);
+    }
+    return token;
+  }
+
   async waitForEmail(email: string, subject: string, timeoutMs: number = 30000): Promise<MailHogMessage> {
     const startTime = Date.now();
 

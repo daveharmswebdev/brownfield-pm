@@ -27,7 +27,8 @@ public class IdentityService : IIdentityService
         string password,
         Guid accountId,
         string role,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool emailConfirmed = false)
     {
         var user = new ApplicationUser
         {
@@ -35,7 +36,7 @@ public class IdentityService : IIdentityService
             UserName = email,
             AccountId = accountId,
             Role = role,
-            EmailConfirmed = false
+            EmailConfirmed = emailConfirmed
         };
 
         var result = await _userManager.CreateAsync(user, password);

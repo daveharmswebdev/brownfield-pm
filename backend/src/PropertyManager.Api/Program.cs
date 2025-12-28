@@ -10,6 +10,7 @@ using PropertyManager.Application.Common.Interfaces;
 using PropertyManager.Infrastructure.Email;
 using PropertyManager.Infrastructure.Identity;
 using PropertyManager.Infrastructure.Persistence;
+using PropertyManager.Infrastructure.Persistence.Seeding;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,6 +48,7 @@ builder.Services.AddScoped<ICurrentUser, CurrentUserService>();
 builder.Services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
 builder.Services.AddScoped<IIdentityService, IdentityService>();
 builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+builder.Services.AddScoped<DatabaseSeeder>();
 
 // Configure Email settings
 builder.Services.Configure<EmailSettings>(
@@ -169,6 +171,23 @@ if (app.Environment.IsProduction())
     {
         Log.Fatal(ex, "Failed to apply database migrations - application cannot start");
         throw; // Prevent app from starting with failed migrations
+    }
+}
+
+// Seed database in Development mode for E2E tests
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
+    try
+    {
+        Log.Information("Seeding database for development/E2E testing...");
+        await seeder.SeedAsync();
+        Log.Information("Database seeding completed");
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "Database seeding failed - continuing anyway");
     }
 }
 

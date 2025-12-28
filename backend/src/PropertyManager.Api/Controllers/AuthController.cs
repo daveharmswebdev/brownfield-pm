@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PropertyManager.Application.Auth;
@@ -19,6 +20,7 @@ public class AuthController : ControllerBase
     private readonly IValidator<LoginCommand> _loginValidator;
     private readonly IValidator<ForgotPasswordCommand> _forgotPasswordValidator;
     private readonly IValidator<ResetPasswordCommand> _resetPasswordValidator;
+    private readonly IValidator<SendInvitationCommand> _sendInvitationValidator;
     private readonly ILogger<AuthController> _logger;
 
     // Cookie name for refresh token
@@ -30,6 +32,7 @@ public class AuthController : ControllerBase
         IValidator<LoginCommand> loginValidator,
         IValidator<ForgotPasswordCommand> forgotPasswordValidator,
         IValidator<ResetPasswordCommand> resetPasswordValidator,
+        IValidator<SendInvitationCommand> sendInvitationValidator,
         ILogger<AuthController> logger)
     {
         _mediator = mediator;
@@ -37,24 +40,25 @@ public class AuthController : ControllerBase
         _loginValidator = loginValidator;
         _forgotPasswordValidator = forgotPasswordValidator;
         _resetPasswordValidator = resetPasswordValidator;
+        _sendInvitationValidator = sendInvitationValidator;
         _logger = logger;
     }
 
 /// <summary>
-    /// Register a new user account.
-    /// Creates an Account with the provided name and a User with "Owner" role.
-    /// Sends verification email to the provided address.
+    /// Register a new user account using an invitation token.
+    /// Creates an Account and User with "Owner" role.
+    /// Invited users have email already verified.
     /// </summary>
-    /// <param name="request">Registration details</param>
+    /// <param name="request">Registration details with invitation token</param>
     /// <returns>User ID on success</returns>
     /// <response code="201">Returns the newly created user's ID</response>
-    /// <response code="400">If validation fails or email already exists</response>
+    /// <response code="400">If validation fails, token is invalid/expired, or email already exists</response>
     [HttpPost("register")]
     [ProducesResponseType(typeof(RegisterResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
-        var command = new RegisterCommand(request.Email, request.Password, request.Name);
+        var command = new RegisterCommand(request.Password, request.Token);
 
         // Validate command
         var validationResult = await _registerValidator.ValidateAsync(command);
@@ -300,6 +304,53 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Send an invitation email to a new user.
+    /// Only accessible by authenticated users with "Owner" role.
+    /// Creates an invitation with 24-hour expiry.
+    /// </summary>
+    /// <param name="request">Email address to invite</param>
+    /// <returns>Success status</returns>
+    /// <response code="200">Invitation sent successfully</response>
+    /// <response code="400">If validation fails or invitation already exists</response>
+    /// <response code="401">If user is not authenticated</response>
+    /// <response code="403">If user is not an Owner</response>
+    [HttpPost("invite")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Owner")]
+    [ProducesResponseType(typeof(SendInvitationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> SendInvitation([FromBody] SendInvitationRequest request)
+    {
+        var command = new SendInvitationCommand(request.Email);
+
+        // Validate command
+        var validationResult = await _sendInvitationValidator.ValidateAsync(command);
+        if (!validationResult.IsValid)
+        {
+            var problemDetails = CreateValidationProblemDetails(validationResult);
+            return BadRequest(problemDetails);
+        }
+
+        try
+        {
+            var result = await _mediator.Send(command);
+
+            if (!result.Success)
+            {
+                return BadRequest(CreateProblemDetails(result.Error ?? "Failed to send invitation"));
+            }
+
+            _logger.LogInformation("Invitation sent to {Email} at {Timestamp}", request.Email, DateTime.UtcNow);
+            return Ok(new SendInvitationResponse(true, "Invitation sent successfully"));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, CreateProblemDetails(ex.Message));
+        }
+    }
+
+    /// <summary>
     /// Sets the refresh token as an HttpOnly cookie with security flags (AC4.1).
     /// </summary>
     private void SetRefreshTokenCookie(string refreshToken)
@@ -381,12 +432,11 @@ public class AuthController : ControllerBase
 }
 
 /// <summary>
-/// Request model for user registration.
+/// Request model for user registration via invitation.
 /// </summary>
 public record RegisterRequest(
-    string Email,
     string Password,
-    string Name
+    string Token
 );
 
 /// <summary>
@@ -440,4 +490,19 @@ public record ForgotPasswordRequest(
 public record ResetPasswordRequest(
     string Token,
     string NewPassword
+);
+
+/// <summary>
+/// Request model for sending an invitation.
+/// </summary>
+public record SendInvitationRequest(
+    string Email
+);
+
+/// <summary>
+/// Response model for invitation.
+/// </summary>
+public record SendInvitationResponse(
+    bool Success,
+    string Message
 );

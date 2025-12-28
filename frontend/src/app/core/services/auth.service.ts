@@ -3,9 +3,8 @@ import { Injectable, inject, computed, signal } from '@angular/core';
 import { Observable, tap, catchError, throwError, BehaviorSubject, of } from 'rxjs';
 
 export interface RegisterRequest {
-  email: string;
   password: string;
-  name: string;
+  token: string;
 }
 
 export interface RegisterResponse {

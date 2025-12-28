@@ -9,13 +9,20 @@ public interface IIdentityService
     /// <summary>
     /// Creates a new user with the given credentials and links to account.
     /// </summary>
+    /// <param name="email">User's email address</param>
+    /// <param name="password">User's password</param>
+    /// <param name="accountId">Account to link user to</param>
+    /// <param name="role">User's role (e.g., "Owner")</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <param name="emailConfirmed">Whether email should be marked as confirmed (true for invited users)</param>
     /// <returns>Tuple of (UserId, PasswordErrors). UserId is null if creation failed.</returns>
     Task<(Guid? UserId, IEnumerable<string> Errors)> CreateUserAsync(
         string email,
         string password,
         Guid accountId,
         string role,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        bool emailConfirmed = false);
 
     /// <summary>
     /// Checks if a user with the given email already exists.

@@ -37,6 +37,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<Receipt> Receipts => Set<Receipt>();
     public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<Invitation> Invitations => Set<Invitation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -81,6 +82,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
 
         // Apply tenant filter to RefreshToken (no soft delete, just tenant isolation)
         modelBuilder.Entity<RefreshToken>()
+            .HasQueryFilter(e => CurrentAccountId == null || e.AccountId == CurrentAccountId);
+
+        // Apply tenant filter to Invitation (no soft delete, just tenant isolation)
+        // Note: Invitation lookup by token during registration bypasses tenant filter via IgnoreQueryFilters()
+        modelBuilder.Entity<Invitation>()
             .HasQueryFilter(e => CurrentAccountId == null || e.AccountId == CurrentAccountId);
     }
 

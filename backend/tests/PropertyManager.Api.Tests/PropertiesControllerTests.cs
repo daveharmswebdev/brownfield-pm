@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using PropertyManager.Domain.Entities;
+using PropertyManager.Infrastructure.Identity;
 using PropertyManager.Infrastructure.Persistence;
 
 namespace PropertyManager.Api.Tests;
@@ -234,32 +237,84 @@ public class PropertiesControllerTests : IClassFixture<PropertyManagerWebApplica
     {
         var password = "Test@123456";
 
-        // Register
-        var registerRequest = new
-        {
-            Email = email,
-            Password = password,
-            Name = "Test Account"
-        };
+        // Create an owner user to send the invitation
+        var (ownerEmail, ownerPassword, _) = await CreateOwnerUser();
+
+        // Login as owner and send invitation
+        var invitationToken = await SendInvitationAndGetToken(ownerEmail, ownerPassword, email);
+
+        // Register with the invitation token
+        var registerRequest = new { Password = password, Token = invitationToken };
         var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
         registerResponse.EnsureSuccessStatusCode();
 
-        // Verify email using fake email service
-        using var scope = _factory.Services.CreateScope();
-        var fakeEmailService = scope.ServiceProvider.GetRequiredService<FakeEmailService>();
-        var verificationToken = fakeEmailService.SentVerificationEmails.Last().Token;
-
-        var verifyRequest = new { Token = verificationToken };
-        var verifyResponse = await _client.PostAsJsonAsync("/api/v1/auth/verify-email", verifyRequest);
-        verifyResponse.EnsureSuccessStatusCode();
-
-        // Login
+        // Login as the newly registered user
         var loginRequest = new { Email = email, Password = password };
         var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
         loginResponse.EnsureSuccessStatusCode();
 
         var loginContent = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
         return (loginContent!.AccessToken, Guid.Empty);
+    }
+
+    private async Task<(string email, string password, Guid accountId)> CreateOwnerUser()
+    {
+        var email = $"owner{Guid.NewGuid():N}@example.com";
+        var password = "Test@123456";
+
+        using var scope = _factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        // Create account
+        var account = new Account { Name = email.Split('@')[0] };
+        dbContext.Accounts.Add(account);
+        await dbContext.SaveChangesAsync();
+
+        // Create user with email confirmed
+        var user = new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+            EmailConfirmed = true,
+            AccountId = account.Id,
+            Role = "Owner"
+        };
+
+        var result = await userManager.CreateAsync(user, password);
+        result.Succeeded.Should().BeTrue($"User creation failed: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+
+        return (email, password, account.Id);
+    }
+
+    private async Task<string> SendInvitationAndGetToken(string ownerEmail, string ownerPassword, string inviteeEmail)
+    {
+        var accessToken = await LoginAndGetToken(ownerEmail, ownerPassword);
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/invite");
+        request.Headers.Add("Authorization", $"Bearer {accessToken}");
+        request.Content = JsonContent.Create(new { Email = inviteeEmail });
+
+        var response = await _client.SendAsync(request);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Get the invitation token from the fake email service
+        using var scope = _factory.Services.CreateScope();
+        var fakeEmailService = scope.ServiceProvider.GetRequiredService<FakeEmailService>();
+        var sentEmail = fakeEmailService.SentInvitationEmails.FirstOrDefault(e => e.Email == inviteeEmail);
+        sentEmail.Should().NotBeNull($"Invitation email should have been sent to {inviteeEmail}");
+
+        return sentEmail!.Token;
+    }
+
+    private async Task<string> LoginAndGetToken(string email, string password)
+    {
+        var loginRequest = new { Email = email, Password = password };
+        var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
+        loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var content = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+        return content!.AccessToken;
     }
 
     [Fact]

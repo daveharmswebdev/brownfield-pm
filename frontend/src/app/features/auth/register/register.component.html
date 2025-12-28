@@ -2,16 +2,25 @@
   <mat-card class="register-card">
     <mat-card-header>
       <mat-card-title>Create Account</mat-card-title>
-      <mat-card-subtitle>Register for Property Manager</mat-card-subtitle>
+      <mat-card-subtitle>Complete your registration</mat-card-subtitle>
     </mat-card-header>
 
-    @if (success()) {
+    @if (tokenError()) {
+      <mat-card-content class="error-content">
+        <mat-icon class="error-icon">error</mat-icon>
+        <h2>Invalid Invitation</h2>
+        <p>{{ tokenError() }}</p>
+        <p class="contact-note">
+          Please contact your account administrator to request a new invitation.
+        </p>
+      </mat-card-content>
+    } @else if (success()) {
       <mat-card-content class="success-content">
         <mat-icon class="success-icon">check_circle</mat-icon>
-        <h2>Registration Successful!</h2>
-        <p>Please check your email to verify your account.</p>
-        <p class="email-note">
-          A verification link has been sent to <strong>{{ form.get('email')?.value }}</strong>
+        <h2>Registration Complete!</h2>
+        <p>Your account has been created successfully.</p>
+        <p class="login-note">
+          You can now <a routerLink="/login">sign in</a> to access Property Manager.
         </p>
       </mat-card-content>
     } @else {
@@ -23,30 +32,11 @@
             </div>
           }
 
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Account Name</mat-label>
-            <input matInput formControlName="accountName" placeholder="My Property Business">
-            @if (form.get('accountName')?.hasError('required') && form.get('accountName')?.touched) {
-              <mat-error>Account name is required</mat-error>
-            }
-            @if (getServerError('accountName') || getServerError('Name')) {
-              <mat-error>{{ getServerError('accountName') || getServerError('Name') }}</mat-error>
-            }
-          </mat-form-field>
-
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Email</mat-label>
-            <input matInput type="email" formControlName="email" placeholder="you@example.com">
-            @if (form.get('email')?.hasError('required') && form.get('email')?.touched) {
-              <mat-error>Email is required</mat-error>
-            }
-            @if (form.get('email')?.hasError('email') && form.get('email')?.touched) {
-              <mat-error>Please enter a valid email address</mat-error>
-            }
-            @if (getServerError('email') || getServerError('Email')) {
-              <mat-error>{{ getServerError('email') || getServerError('Email') }}</mat-error>
-            }
-          </mat-form-field>
+          @if (getServerError('invitationToken') || getServerError('InvitationToken')) {
+            <div class="server-error">
+              {{ getServerError('invitationToken') || getServerError('InvitationToken') }}
+            </div>
+          }
 
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Password</mat-label>
